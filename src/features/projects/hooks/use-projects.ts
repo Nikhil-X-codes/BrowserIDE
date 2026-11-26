@@ -1,0 +1,103 @@
+/* eslint-disable react-hooks/purity */
+
+import { useConvexAuth, useMutation, useQuery } from "convex/react";
+
+import { api } from "../../../../convex/_generated/api";
+import { Id } from "../../../../convex/_generated/dataModel";
+
+export const useProject = (projectId: Id<"projects">) => {
+  const { isAuthenticated } = useConvexAuth();
+
+  return useQuery(
+    api.projects.getById,
+    isAuthenticated ? { id: projectId } : "skip",
+  );
+};
+
+export const useProjects = () => {
+  const { isAuthenticated } = useConvexAuth();
+
+  return useQuery(api.projects.get, isAuthenticated ? {} : "skip");
+};
+
+export const useProjectsPartial = (limit: number) => {
+  const { isAuthenticated } = useConvexAuth();
+
+  return useQuery(
+    api.projects.getPartial,
+    isAuthenticated ? { limit } : "skip",
+  );
+};
+
+export const useCreateProject = () => {
+  return useMutation(api.projects.create).withOptimisticUpdate(
+    (localStore, args) => {
+      const existingProjects = localStore.getQuery(api.projects.get);
+
+      if (existingProjects !== undefined) {
+        const now = Date.now();
+        const newProject = {
+          _id: crypto.randomUUID() as Id<"projects">,
+          _creationTime: now,
+          name: args.name,
+          ownerId: "anonymous",
+          updatedAt: now,
+        };
+
+        localStore.setQuery(api.projects.get, {}, [
+          newProject,
+          ...existingProjects,
+        ]);
+      }
+    }
+  )
+};
+
+export const useRenameProject = () => {
+  return useMutation(api.projects.rename).withOptimisticUpdate(
+    (localStore, args) => {
+      const existingProject = localStore.getQuery(
+        api.projects.getById,
+        { id: args.id }
+      );
+
+      if (existingProject !== undefined  && existingProject !== null) {
+        localStore.setQuery(
+          api.projects.getById,
+          { id: args.id },
+          {
+            ...existingProject,
+            name: args.name,
+            updatedAt: Date.now(),
+          }
+        );
+      }
+
+      const existingProjects = localStore.getQuery(api.projects.get);
+
+      if (existingProjects !== undefined) {
+        localStore.setQuery(
+          api.projects.get,
+          {},
+          existingProjects.map((project) => {
+            return project._id === args.id
+              ? { ...project, name: args.name, updatedAt: Date.now() }
+              : project
+          })
+        );
+      }
+    }
+  )
+};
+
+export const useUpdateProjectSettings = () => {
+  return useMutation(api.projects.updateSettings);
+};
+
+export const usePublicProject = (projectId: Id<"projects">) => {
+  return useQuery(api.projects.getPublicProject, { id: projectId });
+};
+
+export const useToggleProjectPublic = () => {
+  return useMutation(api.projects.togglePublic);
+};
